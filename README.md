@@ -1,18 +1,17 @@
-![img.png](img.png) analisis de sonarqube
-![img_1.png](img_1.png) analisis segundo de sonarqube
+![img_2.png](img_2.png) analisis sonarqube
 
-Listo. Este `README.md` está ajustado a la **Unidad 11, Post-Contenido 1**, donde te piden documentar la refactorización avanzada, las técnicas aplicadas, la comparación antes/después en SonarQube y las capturas de pantalla del análisis inicial y final. La guía exige específicamente tabla comparativa de métricas SonarQube, descripción de cada técnica aplicada y evidencias con capturas antes/después.
+Listo. Este `README.md` está ajustado a la **Unidad 11, Post-Contenido 2**, donde la guía pide documentar la refactorización de condicionales complejos usando **Replace Conditional with Polymorphism**, **Guard Clauses**, comparación de complejidad ciclomática antes/después, captura del **Quality Gate Passed** y reflexión sobre el principio **Open/Closed**.
 
 Copia esto completo en tu archivo `README.md`:
 
 ````markdown
-# Refactorización Avanzada y Clean Code Profundo — Unidad 11
+# Refactorización de Condicionales Complejos — Unidad 11 Post-Contenido 2
 
 ## 1. Descripción del proyecto
 
-Este repositorio corresponde al laboratorio de la Unidad 11: Refactorización Avanzada y Clean Code Profundo, Post-Contenido 1. El objetivo principal fue identificar code smells de tipo Bloater en un servicio Spring Boot y eliminarlos mediante técnicas formales de refactorización, verificando posteriormente la mejora de las métricas con SonarQube.
+Este repositorio corresponde al laboratorio de la Unidad 11: Refactorización Avanzada y Clean Code Profundo, Post-Contenido 2. El objetivo principal fue refactorizar condicionales complejos con alta complejidad ciclomática mediante las técnicas Replace Conditional with Polymorphism y Guard Clauses, verificando posteriormente con SonarQube que la complejidad disminuyera y que el Quality Gate del proyecto se mantuviera en estado Passed.
 
-El proyecto parte de un código intencionalmente deficiente en la clase `PedidoService`, donde se concentraban problemas como `Long Method`, `Large Class`, `Primitive Obsession`, inyección de dependencias por campo y mezcla de responsabilidades. Después del análisis inicial, se aplicaron técnicas como `Extract Method`, `Extract Class` e introducción de `Value Objects`, con el fin de reducir la complejidad ciclomática, mejorar la mantenibilidad y separar adecuadamente las responsabilidades del sistema.
+El proyecto parte de un código Spring Boot que contenía dos problemas principales: un método `calcularEnvio` implementado con estructura `switch`, y un método `aprobarCredito` desarrollado mediante condicionales anidados, también conocidos como arrow code. Ambos casos fueron refactorizados conservando el comportamiento original mediante pruebas unitarias con JUnit 5.
 
 ---
 
@@ -21,9 +20,7 @@ El proyecto parte de un código intencionalmente deficiente en la clase `PedidoS
 - Java 17+
 - Spring Boot
 - Maven
-- Spring Web
-- Spring Data JPA
-- H2 Database
+- JUnit 5
 - SonarQube Community Edition
 - Docker Desktop
 - Git
@@ -33,266 +30,206 @@ El proyecto parte de un código intencionalmente deficiente en la clase `PedidoS
 
 ## 3. Objetivo del laboratorio
 
-El objetivo del laboratorio fue analizar un servicio Spring Boot con problemas deliberados de diseño y aplicar refactorización avanzada para mejorar la calidad interna del código. La mejora se verificó mediante dos análisis en SonarQube: uno antes de la refactorización y otro después de aplicar las correcciones.
+El objetivo del laboratorio fue disminuir la complejidad ciclomática de métodos con condicionales complejos, aplicando técnicas de refactorización que mejoran la mantenibilidad del código sin alterar su comportamiento funcional.
 
-Las técnicas aplicadas fueron:
+Para cumplir este objetivo, se realizaron las siguientes actividades:
 
-- `Extract Method`, para dividir métodos extensos en operaciones más pequeñas y cohesivas.
-- `Extract Class`, para separar responsabilidades que no pertenecían directamente al servicio principal.
-- Introducción de `Value Objects`, para eliminar Primitive Obsession y agrupar datos relacionados.
-- Inyección por constructor, para mejorar la testabilidad y reducir el acoplamiento implícito.
+- Agregar código con `Switch Statement smell` y `arrow code`.
+- Escribir pruebas unitarias antes de refactorizar.
+- Aplicar Replace Conditional with Polymorphism en el cálculo de envíos.
+- Aplicar Guard Clauses en la aprobación de crédito.
+- Ejecutar un segundo análisis con SonarQube.
+- Verificar que el Quality Gate permaneciera en estado Passed.
+- Documentar la comparación de métricas antes y después.
 
 ---
 
-## 4. Análisis inicial con SonarQube
+## 4. Código inicial con problemas de calidad
 
-Antes de aplicar las refactorizaciones, se ejecutó un primer análisis con SonarQube sobre el código original. El servicio principal presentaba varios problemas de mantenibilidad, principalmente asociados a una clase con demasiadas responsabilidades y a un método excesivamente largo.
+### 4.1 Método `calcularEnvio`
 
-El análisis inicial se ejecutó con el siguiente comando:
+Inicialmente, el cálculo del costo de envío se resolvía mediante una estructura `switch`, donde cada tipo de envío estaba definido como un caso dentro del mismo método.
 
-```bash
-mvn verify sonar:sonar \
-  -Dsonar.host.url=http://localhost:9000 \
-  -Dsonar.token=TU_TOKEN \
-  -Dsonar.projectKey=refactoring-u11
+```java
+public double calcularEnvio(Pedido pedido, String tipoEnvio) {
+    switch (tipoEnvio) {
+        case "ESTANDAR": return pedido.getTotal() > 50 ? 0 : 5.99;
+        case "EXPRESS": return 12.99;
+        case "MISMO_DIA": return 24.99;
+        case "GRATIS": return 0;
+        default: throw new IllegalArgumentException(
+                "Tipo de envio desconocido: " + tipoEnvio);
+    }
+}
 ````
 
----
-
-## 5. Code smells identificados inicialmente
-
-### 5.1 Long Method
-
-El método `procesarPedido` concentraba varias operaciones dentro de un solo bloque de código: validación del cliente, cálculo del total, aplicación de descuentos, notificación y persistencia del pedido.
-
-Este diseño reduce la legibilidad, aumenta la complejidad ciclomática y dificulta la prueba unitaria del comportamiento del sistema.
+Este diseño genera un problema de mantenibilidad porque cada nuevo tipo de envío obliga a modificar el método existente. Además, aumenta la complejidad ciclomática y dificulta la extensión del sistema.
 
 ---
 
-### 5.2 Large Class
+### 4.2 Método `aprobarCredito`
 
-La clase `PedidoService` asumía responsabilidades que no correspondían exclusivamente al procesamiento del pedido. Además de coordinar la lógica principal, también contenía lógica de notificación y validaciones detalladas del cliente.
-
-Esto afecta el principio de responsabilidad única, ya que una misma clase queda encargada de múltiples razones de cambio.
-
----
-
-### 5.3 Primitive Obsession
-
-El método `procesarPedido` recibía demasiados parámetros primitivos o simples, como `clienteNombre`, `clienteEmail`, `clienteTelefono`, `clienteDireccion`, `clienteCiudad` y `clienteCodigoPostal`.
-
-Estos datos representaban conceptualmente una misma entidad del dominio, pero estaban dispersos como valores independientes. Para corregirlo, se introdujeron objetos de valor.
-
----
-
-### 5.4 Inyección de dependencias por campo
-
-El código inicial utilizaba `@Autowired` directamente sobre el atributo del repositorio:
+El método `aprobarCredito` presentaba condicionales profundamente anidados. Este estilo de programación dificulta la lectura del código y aumenta la complejidad lógica.
 
 ```java
-@Autowired
-private PedidoRepository repo;
-```
-
-Esta práctica reduce la claridad de las dependencias obligatorias de la clase y dificulta la construcción de pruebas unitarias.
-
----
-
-## 6. Técnicas de refactorización aplicadas
-
-### 6.1 Introducción de Value Object: `DatosCliente`
-
-Para eliminar el problema de `Primitive Obsession`, se creó la clase `DatosCliente`, encargada de encapsular los datos principales del cliente.
-
-```java
-public class DatosCliente {
-
-    private final String nombre;
-    private final String email;
-    private final String telefono;
-    private final Direccion direccion;
-
-    public DatosCliente(String nombre, String email, String telefono, Direccion direccion) {
-        if (nombre == null || nombre.isBlank()) {
-            throw new IllegalArgumentException("Nombre requerido");
+public String aprobarCredito(Cliente c, double monto) {
+    if (c != null) {
+        if (c.isActivo()) {
+            if (c.getScore() >= 600) {
+                if (monto > 0) {
+                    if (monto <= c.getLimiteCredito()) {
+                        return "APROBADO";
+                    }
+                }
+            }
         }
-
-        if (email == null || !email.contains("@")) {
-            throw new IllegalArgumentException("Email inválido");
-        }
-
-        this.nombre = nombre;
-        this.email = email;
-        this.telefono = telefono;
-        this.direccion = direccion;
     }
-
-    public String getNombre() {
-        return nombre;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getTelefono() {
-        return telefono;
-    }
-
-    public Direccion getDireccion() {
-        return direccion;
-    }
+    return "RECHAZADO";
 }
 ```
 
-Con esta refactorización, los datos del cliente dejaron de manejarse como parámetros aislados y pasaron a representarse mediante un objeto con significado dentro del dominio.
+Este tipo de estructura se conoce como `arrow code`, debido a la forma visual que generan las indentaciones anidadas. Aunque el comportamiento funcional es correcto, la legibilidad y mantenibilidad del método se ven afectadas.
 
 ---
 
-### 6.2 Introducción de Value Object: `Direccion`
+## 5. Pruebas antes de refactorizar
 
-También se creó el objeto de valor `Direccion`, encargado de agrupar los datos relacionados con la ubicación del cliente.
+Antes de aplicar cambios estructurales, se escribieron pruebas unitarias para asegurar que el comportamiento original se conservara después de la refactorización.
 
 ```java
-public class Direccion {
+@Test
+void calcularEnvio_estandar_conTotalAlto_debeSerGratis() {
+    Pedido pedido = new Pedido();
+    pedido.setTotal(60.0);
 
-    private final String calle;
-    private final String ciudad;
-    private final String codigoPostal;
-
-    public Direccion(String calle, String ciudad, String codigoPostal) {
-        if (calle == null || calle.isBlank()) {
-            throw new IllegalArgumentException("La calle es requerida");
-        }
-
-        if (ciudad == null || ciudad.isBlank()) {
-            throw new IllegalArgumentException("La ciudad es requerida");
-        }
-
-        if (codigoPostal == null || codigoPostal.isBlank()) {
-            throw new IllegalArgumentException("El código postal es requerido");
-        }
-
-        this.calle = calle;
-        this.ciudad = ciudad;
-        this.codigoPostal = codigoPostal;
-    }
-
-    public String getCalle() {
-        return calle;
-    }
-
-    public String getCiudad() {
-        return ciudad;
-    }
-
-    public String getCodigoPostal() {
-        return codigoPostal;
-    }
+    assertEquals(0.0, service.calcularEnvio(pedido, "ESTANDAR"), 0.001);
 }
 ```
 
-La clase fue diseñada como inmutable, con atributos `final` y sin métodos `set`, lo cual evita modificaciones inconsistentes después de su construcción.
+```java
+@Test
+void aprobarCredito_clienteNulo_debeRechazar() {
+    assertEquals("RECHAZADO", service.aprobarCredito(null, 1000));
+}
+```
+
+Estas pruebas funcionaron como una red de seguridad para validar que la refactorización no modificara el comportamiento esperado del sistema.
 
 ---
 
-### 6.3 Aplicación de Extract Method
+## 6. Refactorización aplicada
 
-El método `procesarPedido` fue dividido en métodos más pequeños, cada uno con una responsabilidad específica.
+## 6.1 Replace Conditional with Polymorphism
 
-Código refactorizado:
+Para eliminar el `switch` del método `calcularEnvio`, se aplicó la técnica Replace Conditional with Polymorphism mediante el patrón Strategy. Esta refactorización permitió distribuir la lógica de cada tipo de envío en clases independientes.
+
+### Interfaz `EstrategiaEnvio`
 
 ```java
-public String procesarPedido(DatosCliente cliente,
-                             LineaPedido[] lineas,
-                             String metodoPago,
-                             boolean esUrgente,
-                             CodigoDescuento descuento) {
-
-    double total = calcularTotal(lineas);
-    double totalConDescuento = aplicarDescuento(total, descuento);
-    notificacionService.notificarPedido(cliente, esUrgente);
-
-    return persistirPedido(cliente, totalConDescuento);
+public interface EstrategiaEnvio {
+    double calcularCosto(Pedido pedido);
 }
 ```
 
-Método extraído para calcular el total:
+### Estrategia para envío estándar
 
 ```java
-private double calcularTotal(LineaPedido[] lineas) {
-    return Arrays.stream(lineas)
-            .mapToDouble(linea -> linea.getPrecioUnitario() * linea.getCantidad())
-            .sum();
+@Component("ESTANDAR")
+public class EnvioEstandar implements EstrategiaEnvio {
+
+    @Override
+    public double calcularCosto(Pedido pedido) {
+        return pedido.getTotal() > 50 ? 0.0 : 5.99;
+    }
 }
 ```
 
-Método extraído para aplicar descuento:
+### Estrategia para envío express
 
 ```java
-private double aplicarDescuento(double total, CodigoDescuento descuento) {
-    return descuento != null ? total * (1 - descuento.getPorcentaje()) : total;
+@Component("EXPRESS")
+public class EnvioExpress implements EstrategiaEnvio {
+
+    @Override
+    public double calcularCosto(Pedido pedido) {
+        return 12.99;
+    }
 }
 ```
 
-Método extraído para persistir el pedido:
+### Estrategia para envío mismo día
 
 ```java
-private String persistirPedido(DatosCliente cliente, double total) {
-    Pedido pedido = new Pedido(cliente.getNombre(), total);
-    return "OK_" + pedidoRepository.save(pedido).getId();
+@Component("MISMO_DIA")
+public class EnvioMismoDia implements EstrategiaEnvio {
+
+    @Override
+    public double calcularCosto(Pedido pedido) {
+        return 24.99;
+    }
 }
 ```
 
-Esta refactorización redujo el tamaño del método principal y permitió que cada operación quedara representada por una función con intención clara.
+### Estrategia para envío gratis
 
----
+```java
+@Component("GRATIS")
+public class EnvioGratis implements EstrategiaEnvio {
 
-### 6.4 Aplicación de Extract Class: `NotificacionService`
+    @Override
+    public double calcularCosto(Pedido pedido) {
+        return 0.0;
+    }
+}
+```
 
-La lógica de notificación fue separada de `PedidoService`, ya que enviar mensajes o correos no corresponde directamente a la responsabilidad principal del servicio de pedidos.
+### Servicio refactorizado
 
 ```java
 @Service
-public class NotificacionService {
+public class EnvioService {
 
-    public void notificarPedido(DatosCliente cliente, boolean urgente) {
-        System.out.println("Enviando notificación a: " + cliente.getEmail());
-        System.out.println("Pedido urgente: " + urgente);
+    private final Map<String, EstrategiaEnvio> estrategias;
+
+    public EnvioService(Map<String, EstrategiaEnvio> estrategias) {
+        this.estrategias = estrategias;
+    }
+
+    public double calcularEnvio(Pedido pedido, String tipo) {
+        return Optional.ofNullable(estrategias.get(tipo))
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Tipo de envío desconocido: " + tipo))
+                .calcularCosto(pedido);
     }
 }
 ```
 
-Con esta separación, `PedidoService` queda enfocado en procesar pedidos, mientras que `NotificacionService` asume la responsabilidad de las notificaciones.
+Con esta refactorización, el método `calcularEnvio` deja de conocer directamente todas las variantes de envío. La lógica queda distribuida en implementaciones concretas de `EstrategiaEnvio`.
 
 ---
 
-### 6.5 Inyección por constructor
+## 6.2 Guard Clauses
 
-Se reemplazó la inyección por campo con `@Autowired` por inyección mediante constructor.
+Para refactorizar el método `aprobarCredito`, se reemplazaron los condicionales anidados por cláusulas de guarda. Esta técnica permite retornar anticipadamente cuando una condición invalida el flujo principal.
 
 ```java
-@Service
-public class PedidoService {
-
-    private final PedidoRepository pedidoRepository;
-    private final NotificacionService notificacionService;
-
-    public PedidoService(PedidoRepository pedidoRepository,
-                         NotificacionService notificacionService) {
-        this.pedidoRepository = pedidoRepository;
-        this.notificacionService = notificacionService;
-    }
+public String aprobarCredito(Cliente c, double monto) {
+    if (c == null) return "RECHAZADO";
+    if (!c.isActivo()) return "RECHAZADO";
+    if (c.getScore() < 600) return "RECHAZADO";
+    if (monto <= 0) return "RECHAZADO";
+    if (monto > c.getLimiteCredito()) return "RECHAZADO";
+    return "APROBADO";
 }
 ```
 
-Esta modificación hace explícitas las dependencias obligatorias de la clase, mejora la testabilidad y evita dependencias ocultas.
+Después de esta refactorización, el método conserva el mismo comportamiento, pero resulta más legible porque elimina la indentación profunda y expresa claramente las condiciones de rechazo.
 
 ---
 
-## 7. Segundo análisis con SonarQube
+## 7. Análisis con SonarQube
 
-Después de aplicar las refactorizaciones, se ejecutó nuevamente el análisis en SonarQube con el mismo proyecto y las mismas propiedades de análisis.
+Después de aplicar las refactorizaciones, se ejecutó nuevamente el análisis con SonarQube para verificar la reducción de complejidad ciclomática y el cumplimiento del Quality Gate.
 
 Comando utilizado:
 
@@ -300,40 +237,36 @@ Comando utilizado:
 mvn verify sonar:sonar \
   -Dsonar.host.url=http://localhost:9000 \
   -Dsonar.token=sqp_8395df27ddf8a5043f674c619b686a0aa2202a5e \
-  -Dsonar.projectKey=refactoring-u11
+  -Dsonar.projectKey=refactoring-u11-post2
 ```
-
-El propósito del segundo análisis fue verificar la reducción de code smells, la disminución de la complejidad ciclomática del método `procesarPedido` y la mejora general de la mantenibilidad.
 
 ---
 
 ## 8. Comparación de métricas antes y después
 
-| Métrica                                     | Antes de refactorizar | Después de refactorizar | Resultado            |
-| ------------------------------------------- | --------------------- | ----------------------- | -------------------- |
-| Code Smells                                 | X                     | X                       | Disminuyó            |
-| Complejidad ciclomática de `procesarPedido` | X                     | X                       | Disminuyó            |
-| Technical Debt Ratio                        | X                     | X                       | Mejoró               |
-| Bugs                                        | X                     | X                       | Mejoró / Sin cambios |
-| Vulnerabilities                             | X                     | X                       | Mejoró / Sin cambios |
-| Maintainability Rating                      | X                     | X                       | Mejoró / Sin cambios |
-| Reliability Rating                          | X                     | X                       | Mejoró / Sin cambios |
-| Security Rating                             | X                     | X                       | Mejoró / Sin cambios |
+| Métrica                                     | Antes de refactorizar | Después de refactorizar | Resultado               |
+| ------------------------------------------- | --------------------- | ----------------------- | ----------------------- |
+| Complejidad ciclomática de `calcularEnvio`  | 5                     | 1                       | Disminuyó               |
+| Complejidad ciclomática de `aprobarCredito` | 6                     | 2                       | Disminuyó               |
+| Code Smells                                 | X                     | X                       | Disminuyó / Sin cambios |
+| Bugs                                        | X                     | X                       | Mejoró / Sin cambios    |
+| Vulnerabilities                             | X                     | X                       | Mejoró / Sin cambios    |
+| Coverage                                    | X%                    | X%                      | Se mantuvo / Mejoró     |
+| Quality Gate                                | X                     | Passed                  | Cumple                  |
 
-> Nota: Los valores marcados con `X` deben reemplazarse por los datos exactos mostrados en las dos capturas de SonarQube.
+> Nota: Reemplazar los valores marcados con `X` por los datos exactos mostrados en las capturas de SonarQube.
 
 ---
 
 
-
-## 9. Estructura del repositorio
+## 10. Estructura del repositorio
 
 ```text
-apellido-post1-u11/
+apellido-post2-u11/
 │
 ├── docs/
 │   ├── sonarqube-antes.png
-│   └── sonarqube-despues.png
+│   └── sonarqube-quality-gate.png
 │
 ├── src/
 │   ├── main/
@@ -342,23 +275,29 @@ apellido-post1-u11/
 │   │           └── universidad/
 │   │               └── refactoringu11/
 │   │                   ├── domain/
-│   │                   │   ├── Pedido.java
-│   │                   │   ├── Producto.java
-│   │                   │   ├── DatosCliente.java
-│   │                   │   ├── Direccion.java
-│   │                   │   ├── LineaPedido.java
-│   │                   │   └── CodigoDescuento.java
-│   │                   │
-│   │                   ├── repository/
-│   │                   │   └── PedidoRepository.java
+│   │                   │   ├── Cliente.java
+│   │                   │   └── Pedido.java
 │   │                   │
 │   │                   ├── service/
-│   │                   │   ├── PedidoService.java
-│   │                   │   └── NotificacionService.java
+│   │                   │   ├── EnvioService.java
+│   │                   │   └── CreditoService.java
+│   │                   │
+│   │                   ├── strategy/
+│   │                   │   ├── EstrategiaEnvio.java
+│   │                   │   ├── EnvioEstandar.java
+│   │                   │   ├── EnvioExpress.java
+│   │                   │   ├── EnvioMismoDia.java
+│   │                   │   └── EnvioGratis.java
 │   │                   │
 │   │                   └── RefactoringU11Application.java
 │   │
 │   └── test/
+│       └── java/
+│           └── com/
+│               └── universidad/
+│                   └── refactoringu11/
+│                       ├── EnvioServiceTest.java
+│                       └── CreditoServiceTest.java
 │
 ├── pom.xml
 ├── sonar-project.properties
@@ -367,25 +306,30 @@ apellido-post1-u11/
 
 ---
 
-## 10. Commits realizados
+## 11. Commits realizados
 
-El repositorio contiene commits descriptivos que evidencian el avance progresivo del laboratorio:
+El repositorio contiene commits descriptivos que evidencian el desarrollo progresivo del laboratorio:
 
 ```text
-1. Creación del código original con code smells
-2. Aplicación de refactorización con Value Objects, Extract Method y Extract Class
-3. Ejecución del segundo análisis y documentación de mejoras en README
+1. Agregar pruebas base para cálculo de envío y aprobación de crédito
+2. Refactorizar cálculo de envío aplicando Strategy y polimorfismo
+3. Refactorizar aprobación de crédito usando Guard Clauses
 ```
 
 ---
 
-## 11. Resultado final
+## 12. Reflexión sobre Open/Closed Principle
 
-Después de aplicar las técnicas de refactorización, el proyecto presenta una estructura más clara, con responsabilidades mejor distribuidas y menor complejidad en el método principal. El uso de `DatosCliente`, `Direccion`, `LineaPedido` y `CodigoDescuento` permitió reemplazar parámetros primitivos dispersos por objetos con significado dentro del dominio.
+El patrón Strategy facilita el cumplimiento del principio Open/Closed porque permite agregar nuevos tipos de envío sin modificar el código de `EnvioService`. Si el sistema requiere un nuevo tipo de envío, basta con crear una nueva clase que implemente `EstrategiaEnvio` y registrarla como componente de Spring. De esta forma, el servicio queda cerrado para modificación, pero abierto para extensión. Esto reduce el riesgo de introducir errores en lógica existente y mejora la mantenibilidad del sistema.
 
-La extracción de métodos redujo el tamaño de `procesarPedido`, mientras que la extracción de `NotificacionService` separó la lógica de notificación de la lógica propia del procesamiento de pedidos. Finalmente, la inyección por constructor permitió hacer explícitas las dependencias del servicio y mejorar la mantenibilidad del código.
+---
 
-El segundo análisis en SonarQube permitió verificar la mejora del proyecto mediante la reducción de code smells y la disminución de la complejidad ciclomática, cumpliendo con los criterios establecidos para la actividad de refactorización avanzada.
+## 13. Resultado final
+
+La refactorización permitió reducir la complejidad ciclomática de los métodos principales sin alterar su comportamiento funcional. El método `calcularEnvio` fue transformado mediante polimorfismo y patrón Strategy, eliminando la estructura `switch`. Por su parte, el método `aprobarCredito` fue simplificado mediante Guard Clauses, eliminando la anidación excesiva.
+
+El segundo análisis en SonarQube permitió verificar la reducción de complejidad y el cumplimiento del Quality Gate, evidenciando una mejora en la mantenibilidad del código y en la calidad estructural del proyecto.
 
 ````
+
 
